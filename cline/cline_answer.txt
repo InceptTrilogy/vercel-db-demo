@@ -1,0 +1,106 @@
+The issue you're experiencing stems from a mismatch between the route definitions in your FastAPI application and how Vercel handles serverless functions and routing.
+
+### **Understanding the Problem**
+
+1. **Route Prefixing**: When you deploy to Vercel, it automatically serves your serverless functions under the `/api` path. So, when you define your endpoint in FastAPI as `"/api/health"`, and Vercel maps it under `/api`, the actual path becomes `/api/api/health`, which is not intended.
+
+2. **Vercel's Routing**: The `routes` field in your `vercel.json` is redirecting all `/api/*` paths to `api/index.py`. This may interfere with the default routing behavior and cause unexpected path mappings.
+
+### **Solution**
+
+**1. Remove the `/api` Prefix from Your Endpoint**
+
+Modify your FastAPI endpoint to remove the `/api` prefix:
+
+```python
+# In api/index.py
+
+@app.get("/health", response_model=HealthResponse)
+async def health() -> HealthResponse:
+    return HealthResponse(
+        status="healthy",
+        version="0.1.0"
+    )
+```
+
+**Explanation**: Since Vercel serves your function under `/api` by default, your FastAPI app should define routes relative to that path. By setting your endpoint to `"/health"`, it will be accessible at `https://your-vercel-app.vercel.app/api/health`.
+
+**2. Simplify Your `vercel.json` Configuration**
+
+Update your `vercel.json` to remove unnecessary fields:
+
+```json
+{
+    "version": 2,
+    "builds": [
+        {
+            "src": "api/index.py",
+            "use": "@vercel/python"
+        }
+    ]
+}
+```
+
+**Explanation**: Vercel automatically handles routing for serverless functions in the `api` directory. By removing the `routes` field, you allow Vercel to use its default routing logic, which maps requests to the corresponding serverless functions.
+
+**3. Ensure Proper Import and Application Instantiation**
+
+Make sure your FastAPI app is properly instantiated and that the file exports the `app` object:
+
+```python
+# In api/index.py
+
+from fastapi import FastAPI
+from models import HealthResponse  # Ensure this import is correct
+
+app = FastAPI()
+
+@app.get("/health", response_model=HealthResponse)
+async def health() -> HealthResponse:
+    return HealthResponse(
+        status="healthy",
+        version="0.1.0"
+    )
+```
+
+**4. Verify Your `requirements.txt`**
+
+Ensure all necessary dependencies are listed in your `requirements.txt` file, including `fastapi` and `pydantic`:
+
+```
+fastapi
+uvicorn
+pydantic
+```
+
+**5. Redeploy Your Application**
+
+After making these changes, redeploy your application to Vercel:
+
+```bash
+vercel --prod
+```
+
+**6. Test the Endpoint**
+
+Access your health check endpoint:
+
+```
+https://your-vercel-app.vercel.app/api/health
+```
+
+### **Why This Works**
+
+- **Alignment with Vercel's Defaults**: By adjusting your endpoint and configuration, you align your application with Vercel's default behavior, reducing complexity and potential misconfigurations.
+
+- **Simplified Routing**: Removing the custom `routes` configuration avoids unintended path remappings that can lead to 404 errors.
+
+### **Additional Tips**
+
+- **Check Logs**: Use Vercel's logging to check for any runtime errors that might not be apparent from the 404 response.
+
+- **Documentation Reference**: For more details, refer to Vercel's official documentation on deploying Python serverless functions.
+
+### **Summary**
+
+The 404 error occurs because the endpoint paths in your FastAPI app do not align with how Vercel routes requests to your serverless functions. By removing the `/api` prefix from your endpoint definitions and simplifying your `vercel.json`, you allow Vercel to correctly map incoming requests to your FastAPI app, resolving the issue.
